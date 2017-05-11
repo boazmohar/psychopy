@@ -29,7 +29,7 @@ messages, (which PsychoPy doesn't use) using the commands::
 # stack of log entries for later writing (don't want files written while
 # drawing)
 
-from __future__ import absolute_import
+
 
 from os import path
 import sys
@@ -41,6 +41,7 @@ _packagePath = path.split(__file__)[0]
 CRITICAL = 50
 FATAL = CRITICAL
 ERROR = 40
+DEPRECATION = ERROR
 WARNING = 30
 WARN = WARNING
 DATA = 25  # will be a custom level
@@ -52,14 +53,15 @@ NOTSET = 0
 _levelNames = {
     CRITICAL: 'CRITICAL',
     ERROR: 'ERROR',
+    WARNING: 'WARNING',
     DATA: 'DATA',
     EXP: 'EXP',
-    WARNING: 'WARNING',
     INFO: 'INFO',
     DEBUG: 'DEBUG',
     NOTSET: 'NOTSET',
     'CRITICAL': CRITICAL,
     'ERROR': ERROR,
+    'DEPRECATION': DEPRECATION,
     'DATA': DATA,
     'EXP': EXP,
     'WARN': WARNING,
@@ -151,7 +153,7 @@ class LogFile(object):
             self.stream = 'stdout'
         elif hasattr(f, 'write'):
             self.stream = f
-        elif type(f) in [unicode, str]:
+        elif type(f) in [str, str]:
             self.stream = codecs.open(f, filemode, encoding)
         self.level = level
         if logger is None:

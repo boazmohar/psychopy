@@ -9,7 +9,7 @@ See demo_mouse.py and i{demo_joystick.py} for examples
 
 # 01/2011 modified by Dave Britton to get mouse event timing
 
-from __future__ import absolute_import
+
 
 import sys
 import string
@@ -129,7 +129,7 @@ def _onPygletKey(symbol, modifiers, emulated=False):
             msg = 'Modifiers must be passed as an integer value.'
             raise ValueError(msg)
 
-        thisKey = unicode(symbol)
+        thisKey = str(symbol)
         keySource = 'EmulatedKey'
     else:
         thisKey = pyglet.window.key.symbol_string(
@@ -289,7 +289,7 @@ def getKeys(keyList=None, modifiers=False, timeStamped=False):
         keyList : **None** or []
             Allows the user to specify a set of keys to check for.
             Only keypresses from this set of keys will be removed from
-            the keyboard buffer. If the keyList is None all keys will be
+            the keyboard buffer. If the keyList is `None`, all keys will be
             checked and the key buffer will be cleared completely.
             NB, pygame doesn't return timestamps (they are always 0)
         modifiers : **False** or True
@@ -327,7 +327,7 @@ def getKeys(keyList=None, modifiers=False, timeStamped=False):
                 # Pressing special keys, such as 'volume-up', results in a
                 # ValueError. This appears to be a bug in pyglet, and may be
                 # specific to certain systems and versions of Python.
-                logging.error(u'Failed to handle keypress')
+                logging.error('Failed to handle keypress')
 
         global _keyBuffer
         if len(_keyBuffer) > 0:
@@ -365,55 +365,80 @@ def getKeys(keyList=None, modifiers=False, timeStamped=False):
         _last = timeStamped.getLastResetTime()
         _clockLast = psychopy.core.monotonicClock.getLastResetTime()
         timeBaseDiff = _last - _clockLast
-        relTuple = [filter(None, (k[0], modifiers and modifiers_dict(k[1]) or None, k[-1] - timeBaseDiff)) for k in targets]
+        relTuple = [[_f for _f in (k[0], modifiers and modifiers_dict(k[1]) or None, k[-1] - timeBaseDiff) if _f] for k in targets]
         return relTuple
     elif timeStamped is True:
-        return [filter(None, (k[0], modifiers and modifiers_dict(k[1]) or None, k[-1])) for k in targets]
-    elif isinstance(timeStamped, (float, int, long)):
-        relTuple = [filter(None, (k[0], modifiers and modifiers_dict(k[1]) or None, k[-1] - timeStamped)) for k in targets]
+        return [[_f for _f in (k[0], modifiers and modifiers_dict(k[1]) or None, k[-1]) if _f] for k in targets]
+    elif isinstance(timeStamped, (float, int)):
+        relTuple = [[_f for _f in (k[0], modifiers and modifiers_dict(k[1]) or None, k[-1] - timeStamped) if _f] for k in targets]
         return relTuple
 
 
-def waitKeys(maxWait=float('inf'), keyList=None, modifiers=False, timeStamped=False):
+def waitKeys(maxWait=float('inf'), keyList=None, modifiers=False,
+             timeStamped=False, clearEvents=True):
     """Same as `~psychopy.event.getKeys`, but halts everything
-    (including drawing) while awaiting input from keyboard. Implicitly
-    clears keyboard, so any preceding keypresses will be lost.
+    (including drawing) while awaiting input from keyboard.
 
     :Parameters:
         maxWait : any numeric value.
             Maximum number of seconds period and which keys to wait for.
             Default is float('inf') which simply waits forever.
+        keyList : **None** or []
+            Allows the user to specify a set of keys to check for.
+            Only keypresses from this set of keys will be removed from
+            the keyboard buffer. If the keyList is `None`, all keys will be
+            checked and the key buffer will be cleared completely.
+            NB, pygame doesn't return timestamps (they are always 0)
         modifiers : **False** or True
             If True will return a list of tuples instead of a list of 
             keynames. Each tuple has (keyname, modifiers). The modifiers
             are a dict of keyboard modifier flags keyed by the modifier
             name (eg. 'shift', 'ctrl').
+        timeStamped : **False**, True, or `Clock`
+            If True will return a list of tuples instead of a list of
+            keynames. Each tuple has (keyname, time). If a `core.Clock`
+            is given then the time will be relative to the `Clock`'s last
+            reset.
+        clearEvents : **True** or False
+            Whether to clear the keyboard event buffer (and discard preceding
+            keypresses) before starting to monitor for new keypresses.
 
     Returns None if times out.
-    """
 
-    # NB pygame.event does have a wait() function that will
-    # do this and maybe leave more cpu idle time?
-    key = None
-    clearEvents('keyboard')  # So that we only take presses from here onwards.
+    """
+    if clearEvents:
+        # Only consider keypresses from here onwards.
+        # We need to invoke clearEvents(), but our keyword argument is
+        # also called clearEvents. We can work around this conflict by
+        # accessing the global scope explicitly.
+        globals()['clearEvents']('keyboard')
 
     # Check for keypresses until maxWait is exceeded
+    #
+    # NB pygame.event does have a wait() function that will
+    # do this and maybe leave more cpu idle time?
+
     timer = psychopy.core.Clock()
-    while key is None and timer.getTime() < maxWait:
-        # Pump events on pyglet windows if they exist
+    got_keypress = False
+
+    while not got_keypress and timer.getTime() < maxWait:
+        # Pump events on pyglet windows if they exist.
         if havePyglet:
             defDisplay = pyglet.window.get_platform().get_default_display()
             for win in defDisplay.get_windows():
                 win.dispatch_events()
 
-        # Get keypresses and return if anything is pressed
-        keys = getKeys(keyList=keyList, modifiers=modifiers, timeStamped=timeStamped)
-        if len(keys):
-            return keys
+        # Get keypresses and return if anything is pressed.
+        keys = getKeys(keyList=keyList, modifiers=modifiers,
+                       timeStamped=timeStamped)
+        if keys:
+            got_keypress = True
 
-    # If maxWait is exceeded (exits while-loop), return None
-    logging.data("No keypress (maxWait exceeded)")
-    return None
+    if got_keypress:
+        return keys
+    else:
+        logging.data('No keypress (maxWait exceeded)')
+        return None
 
 
 def xydist(p1=(0.0, 0.0), p2=(0.0, 0.0)):
@@ -875,7 +900,7 @@ class _GlobalEventKeys(MutableMapping):
 
     _IndexKey = namedtuple('_IndexKey', ['key', 'modifiers'])
 
-    _valid_keys = set(string.lowercase + string.digits
+    _valid_keys = set(string.ascii_lowercase + string.digits
                       + string.punctuation + ' \t')
     _valid_keys.update(['escape', 'left', 'right', 'up', 'down'])
 
@@ -897,7 +922,7 @@ class _GlobalEventKeys(MutableMapping):
 
     def __repr__(self):
         info = ''
-        for index_key, event in self._events.items():
+        for index_key, event in list(self._events.items()):
             info += '\n\t'
             if index_key.modifiers:
                 _modifiers = ['[%s]' % m.upper() for m in index_key.modifiers]
@@ -933,10 +958,10 @@ class _GlobalEventKeys(MutableMapping):
             logging.exp("Removed global key event: '%s'." % event.name)
 
     def __iter__(self):
-        return self._events.iterkeys()
+        return iter(self._events.keys())
 
     def _gen_index_key(self, key):
-        if isinstance(key, (str, unicode)):  # Single key, passed as a string.
+        if isinstance(key, str):  # Single key, passed as a string.
             index_key = self._IndexKey(key, ())
         else:  # Convert modifiers into a hashable type.
             index_key = self._IndexKey(key[0], tuple(key[1]))

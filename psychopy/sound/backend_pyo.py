@@ -2,7 +2,7 @@
 # Copyright (C) 2015 Jonathan Peirce
 # Distributed under the terms of the GNU General Public License (GPL).
 
-from __future__ import division
+
 from psychopy import prefs, exceptions
 from sys import platform
 from psychopy import core, logging
@@ -30,7 +30,7 @@ def _bestDriver(devNames, devIDs):
     for prefDriver in preferredDrivers:
         logging.info('Looking for {}'.format(prefDriver))
         if prefDriver.lower() == 'directsound':
-            prefDriver = u'Primary Sound'
+            prefDriver = 'Primary Sound'
         # look for that driver in available devices
         for devN, devString in enumerate(devNames):
             logging.info('Examining for {}'.format(devString))
@@ -54,6 +54,7 @@ def getDevices(kind=None):
 
     The dict keys are names and items are dicts of properties
     """
+    osEncoding = sys.getfilesystemencoding()
     inputs, outputs = pyo.pa_get_devices_infos()
     if kind is None:
         allDevs = inputs.update(outputs)
@@ -64,7 +65,8 @@ def getDevices(kind=None):
     devs = {}
     for ii in allDevs:  # in pyo this is a dict but keys are ii ! :-/
         dev = allDevs[ii]
-        devs[dev['name']] = dev
+        devName = dev['name'].decode(osEncoding) # convert to unicode
+        devs[devName] = dev
         dev['id'] = ii
     return devs
 
