@@ -533,7 +533,7 @@ class CodeEditor(wx.stc.StyledTextCtrl):
         self.SetBufferedDraw(False)
         self.SetViewEOL(self.coder.appData['showEOLs'])
         self.SetEOLMode(wx.stc.STC_EOL_LF)
-        self.SetUseAntiAliasing(True)
+        # self.SetUseAntiAliasing(True)
         # self.SetUseHorizontalScrollBar(True)
         # self.SetUseVerticalScrollBar(True)
 
@@ -1532,7 +1532,7 @@ class CoderFrame(wx.Frame):
         wx.EVT_MENU(self, wx.ID_SAVE, self.fileSave)
         wx.EVT_MENU(self, wx.ID_SAVEAS, self.fileSaveAs)
         wx.EVT_MENU(self, wx.ID_CLOSE, self.fileClose)
-        item = menu.Append(wx.ID_ANY, 
+        item = menu.Append(wx.ID_ANY,
                            _translate("Print\t%s") % keyCodes['print'])
         wx.EVT_MENU(self, item.GetId(), self.filePrint)
         msg = _translate("&Preferences\t%s")
