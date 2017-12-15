@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
-from __future__ import division
+from __future__ import absolute_import, division, print_function
 
 from builtins import str
 from builtins import range
@@ -19,7 +18,8 @@ import pandas as pd
 from psychopy import logging
 from psychopy.constants import PY3
 from psychopy.tools.arraytools import shuffleArray
-from psychopy.tools.filetools import openOutputFile, genDelimiter
+from psychopy.tools.filetools import (openOutputFile, genDelimiter,
+                                      genFilenameFromDelimiter)
 from .utils import importConditions
 from .base import _BaseTrialHandler, DataHandler
 
@@ -403,7 +403,7 @@ class TrialHandler(_BaseTrialHandler):
             thisLine = []
             lines.append(thisLine)
             # write a header line
-            for heading in stimOut + dataHead:
+            for heading in list(stimOut) + dataHead:
                 if heading == 'ran_sum':
                     heading = 'n'
                 elif heading == 'order_raw':
@@ -626,9 +626,10 @@ class TrialHandler(_BaseTrialHandler):
             delim = genDelimiter(fileName)
 
         # create the file or send to stdout
-        f = openOutputFile(
-            fileName, append=appendFile, delim=delim,
-            fileCollisionMethod=fileCollisionMethod, encoding=encoding)
+        fileName = genFilenameFromDelimiter(fileName, delim)
+        f = openOutputFile(fileName, append=appendFile,
+                           fileCollisionMethod=fileCollisionMethod,
+                           encoding=encoding)
 
         # collect parameter names related to the stimuli:
         if self.trialList[0]:
@@ -718,7 +719,7 @@ class TrialHandler(_BaseTrialHandler):
 
         # Converts numbers to numeric, such as float64, boolean to bool.
         # Otherwise they all are "object" type, i.e. strings
-        df = df.convert_objects()
+        # df = df.convert_objects()
         return df
 
     def saveAsJson(self,
@@ -1106,28 +1107,65 @@ class TrialHandler2(_BaseTrialHandler):
             delim = genDelimiter(fileName)
 
         # create the file or send to stdout
-        f = openOutputFile(
-            fileName, append=appendFile, delim=delim,
-            fileCollisionMethod=fileCollisionMethod, encoding=encoding)
+        fileName = genFilenameFromDelimiter(fileName, delim)
 
-        # defer to pandas for actual data output. We're fetching a string
-        # repr and then writeing to file ourselves
-        # Include header line if not matrixOnly
-        datStr = self.data.to_csv(sep=delim,
-                                  columns=self.columns,  # sets the order
-                                  header=(not matrixOnly),
-                                  index=False)
-        f.write(datStr)
+        with openOutputFile(fileName=fileName, append=appendFile,
+                            fileCollisionMethod=fileCollisionMethod,
+                            encoding=encoding) as f:
+            self.data.to_csv(path_or_buf=f,
+                             sep=delim,
+                             columns=self.columns,  # sets the order
+                             header=(not matrixOnly),
+                             index=False)
 
-        if f != sys.stdout:
-            f.close()
+        if (fileName is not None) and (fileName != 'stdout'):
             logging.info('saved wide-format data to %s' % f.name)
 
     def saveAsJson(self,
                    fileName=None,
                    encoding='utf-8',
                    fileCollisionMethod='rename'):
-        raise NotImplementedError('Not implemented for TrialHandler2.')
+        """
+        Serialize the object to the JSON format.
+
+        Parameters
+        ----------
+        fileName: string, or None
+            the name of the file to create or append. Can include a relative or
+            absolute path. If `None`, will not write to a file, but return an
+            in-memory JSON object.
+
+        encoding : string, optional
+            The encoding to use when writing the file. This parameter will be
+            ignored if `append` is `False` and `fileName` ends with `.psydat`
+            or `.npy` (i.e. if a binary file is to be written).
+
+        fileCollisionMethod : string
+            Collision method passed to
+            :func:`~psychopy.tools.fileerrortools.handleFileCollision`. Can be
+            either of `'rename'`, `'overwrite'`, or `'fail'`.
+
+        Notes
+        -----
+        Currently, a copy of the object is created, and the copy's .origin
+        attribute is set to an empty string before serializing
+        because loading the created JSON file would sometimes fail otherwise.
+
+        The RNG self._rng cannot be serialized as-is, so we store its state in
+        self._rng_state so we can restore it when loading.
+
+        """
+        self_copy = copy.deepcopy(self)
+        self_copy._rng_state = self_copy._rng.get_state()
+        del self_copy._rng
+
+        r = (super(TrialHandler2, self_copy)
+             .saveAsJson(fileName=fileName,
+                         encoding=encoding,
+                         fileCollisionMethod=fileCollisionMethod))
+
+        if fileName is None:
+            return r
 
     def addData(self, thisType, value):
         """Add a piece of data to the current trial
@@ -1696,10 +1734,13 @@ class TrialHandlerExt(TrialHandler):
             dataOut.remove(invalidAnal)
         return dataOut, dataAnal, dataHead
 
-    def saveAsWideText(self, fileName,
+    def saveAsWideText(self,
+                       fileName,
                        delim='\t',
                        matrixOnly=False,
-                       appendFile=True):
+                       appendFile=True,
+                       encoding='utf-8',
+                       fileCollisionMethod='rename'):
         """Write a text file with the session, stimulus, and data values
         from each trial in chronological order.
 
@@ -1739,6 +1780,14 @@ class TrialHandlerExt(TrialHandler):
                 will add this output to the end of the specified file if
                 it already exists.
 
+            fileCollisionMethod:
+                Collision method passed to
+                :func:`~psychopy.tools.fileerrortools.handleFileCollision`
+
+            encoding:
+                The encoding to use when saving a the file.
+                Defaults to `utf-8`.
+
         """
         if self.thisTrialN < 1 and self.thisRepN < 1:
             # if both are < 1 we haven't started
@@ -1746,23 +1795,15 @@ class TrialHandlerExt(TrialHandler):
                          ' completed. Nothing saved')
             return -1
 
+        # set default delimiter if none given
+        if delim is None:
+            delim = genDelimiter(fileName)
+
         # create the file or send to stdout
-        if appendFile:
-            writeFormat = 'a'
-        else:
-            writeFormat = 'w'  # will overwrite a file
-        if fileName == 'stdout':
-            f = sys.stdout
-        elif fileName[-4:] in ('.dlm', '.DLM', '.tsv', '.TSV',
-                               '.txt', '.TXT', '.csv', '.CSV'):
-            f = codecs.open(fileName, writeFormat, encoding="utf-8")
-        else:
-            if delim == ',':
-                f = codecs.open(fileName + '.csv',
-                                writeFormat, encoding="utf-8")
-            else:
-                f = codecs.open(fileName + '.txt',
-                                writeFormat, encoding="utf-8")
+        fileName = genFilenameFromDelimiter(fileName, delim)
+        f = openOutputFile(fileName=fileName, append=appendFile,
+                           fileCollisionMethod=fileCollisionMethod,
+                           encoding=encoding)
 
         # collect parameter names related to the stimuli:
         if self.trialList[0]:
@@ -1847,7 +1888,7 @@ class TrialHandlerExt(TrialHandler):
             line = delim.join([str(trial[prm]) for prm in header])
             f.write(line + '\n')
 
-        if f != sys.stdout:
+        if (fileName is not None) and (fileName != 'stdout'):
             f.close()
             logging.info('saved wide-format data to %s' % f.name)
 

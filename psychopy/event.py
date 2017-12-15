@@ -1,4 +1,6 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 """To handle input from keyboard, mouse and joystick (joysticks require
 pygame to be installed).
 See demo_mouse.py and i{demo_joystick.py} for examples
@@ -9,9 +11,7 @@ See demo_mouse.py and i{demo_joystick.py} for examples
 
 # 01/2011 modified by Dave Britton to get mouse event timing
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import division
+from __future__ import absolute_import, division, print_function
 
 from past.builtins import basestring
 from builtins import str
@@ -148,6 +148,10 @@ def _onPygletKey(symbol, modifiers, emulated=False):
             return
         useText = False
         thisKey = thisKey.lstrip('_').lstrip('NUM_')
+        # Pyglet 1.3.0 returns 'enter' when Return key (0xFF0D) is pressed 
+        # in Windows Python3. So we have to replace 'enter' with 'return'.
+        if thisKey == 'enter':
+            thisKey = 'return'
         keySource = 'Keypress'
     _keyBuffer.append((thisKey, modifiers, keyTime))  # tuple
     logging.data("%s: %s" % (keySource, thisKey))

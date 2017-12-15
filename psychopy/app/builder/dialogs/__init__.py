@@ -8,7 +8,7 @@
 """Dialog classes for the Builder, including ParamCtrls
 """
 
-from __future__ import absolute_import, print_function, division
+from __future__ import absolute_import, division, print_function
 
 from builtins import map
 from builtins import str
@@ -335,7 +335,8 @@ class ParamCtrls(object):
 
         returns: list of dicts of {Field:'', Default:''}
         """
-        expInfo = eval(expInfoStr)
+        expInfo = self.exp.settings.getInfo()
+
         listOfDicts = []
         for field, default in list(expInfo.items()):
             listOfDicts.append({'Field': field, 'Default': default})
@@ -379,7 +380,8 @@ class _BaseParamsDlg(wx.Dialog):
                  showAdvanced=False,
                  size=wx.DefaultSize,
                  style=_style, editing=False,
-                 depends=[]):
+                 depends=[],
+                 timeout=None):
 
         # translate title
         if ' Properties' in title:  # Components and Loops
@@ -397,6 +399,8 @@ class _BaseParamsDlg(wx.Dialog):
         self.helpUrl = helpUrl
         self.params = params  # dict
         self.title = title
+        self.timeout = timeout
+        self.warningsDict = {}  # to store warnings for all fields
         if (not editing and
                 title != 'Experiment Settings' and
                 'name' in self.params):
@@ -793,12 +797,11 @@ class _BaseParamsDlg(wx.Dialog):
             #    nameInfo=''
             # else:
             #    nameInfo='Need a name'
-            nameInfo = 'info here'
+            nameInfo = ''
             self.nameOKlabel = wx.StaticText(self, -1, nameInfo,
-                                             size=(300, 100),
                                              style=wx.ALIGN_CENTRE)
             self.nameOKlabel.SetForegroundColour(wx.RED)
-            self.mainSizer.Add(self.nameOKlabel, flag=wx.ALIGN_CENTRE)
+            self.mainSizer.Add(self.nameOKlabel, 0, flag=wx.ALIGN_CENTRE|wx.ALL, border=3)
         # add buttons for OK and Cancel
         buttons = wx.StdDialogButtonSizer()
         # help button if we know the url
@@ -822,8 +825,8 @@ class _BaseParamsDlg(wx.Dialog):
         buttons.Realize()
         # add to sizer
         self.mainSizer.Add(buttons, flag=wx.ALIGN_RIGHT | wx.ALL, border=2)
-        self.mainSizer.Layout()
         self.SetSizerAndFit(self.mainSizer)
+        self.mainSizer.Layout()
         # move the position to be v near the top of screen and
         # to the right of the left-most edge of builder
         builderPos = self.frame.GetPosition()
@@ -831,9 +834,21 @@ class _BaseParamsDlg(wx.Dialog):
 
         # self.paramCtrls['name'].valueCtrl.SetFocus()
         # do show and process return
-        retVal = self.ShowModal()
+        if self.timeout is not None:
+            timeout = wx.CallLater(self.timeout, self.autoTerminate)
+            timeout.Start()
+        retVal = self.Show()
         self.OK = bool(retVal == wx.ID_OK)
         return wx.ID_OK
+
+    def autoTerminate(self, event=None, retval=1):
+        """Terminates the dialog early, for use with a timeout
+
+        :param event: an optional wx.EVT
+        :param retval: an optional int to pass to EndModal()
+        :return:
+        """
+        self.EndModal(retval)
 
     def Validate(self, *args, **kwargs):
         """Validate form data and disable OK button if validation fails.
@@ -1079,7 +1094,7 @@ class DlgLoopProperties(_BaseParamsDlg):
         localizedTitle = title.replace(' Properties',
                                        _translate(' Properties'))
 
-        wx.Dialog.__init__(self, frame, -1, localizedTitle,
+        wx.Dialog.__init__(self, None, wx.ID_ANY, localizedTitle,
                            pos, size, style)
         self.helpUrl = helpUrl
         self.frame = frame
@@ -1097,6 +1112,7 @@ class DlgLoopProperties(_BaseParamsDlg):
         self.mainSizer = wx.BoxSizer(wx.VERTICAL)
         self.conditions = None
         self.conditionsFile = None
+        self.warningsDict = {}
         # create a valid new name; save old name in case we need to revert
         namespace = frame.exp.namespace
         defaultName = namespace.makeValid('trials')
@@ -1691,11 +1707,13 @@ class DlgExperimentProperties(_BaseParamsDlg):
     def __init__(self, frame, title, params, order, suppressTitles=False,
                  size=wx.DefaultSize, helpUrl=None,
                  style=wx.DEFAULT_DIALOG_STYLE | wx.DIALOG_NO_PARENT,
-                 depends=[]):
+                 depends=[],
+                 timeout=None):
         style = style | wx.RESIZE_BORDER
         _BaseParamsDlg.__init__(self, frame, 'Experiment Settings',
                                 params, order, depends=depends,
-                                size=size, style=style, helpUrl=helpUrl)
+                                size=size, style=style, helpUrl=helpUrl,
+                                timeout=timeout)
         self.frame = frame
         self.app = frame.app
         self.dpi = self.app.dpi
@@ -1775,6 +1793,9 @@ class DlgExperimentProperties(_BaseParamsDlg):
         self.SetPosition((builderPos[0] + 200, 20))
 
         # do show and process return
+        if self.timeout is not None:
+            timeout = wx.CallLater(self.timeout, self.autoTerminate)
+            timeout.Start()
         retVal = self.ShowModal()
         if retVal == wx.ID_OK:
             self.OK = True

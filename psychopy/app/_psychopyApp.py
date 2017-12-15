@@ -5,14 +5,13 @@
 # Copyright (C) 2015 Jonathan Peirce
 # Distributed under the terms of the GNU General Public License (GPL).
 
-from __future__ import absolute_import
-from __future__ import print_function
-from __future__ import division
+from __future__ import absolute_import, division, print_function
 
 from builtins import str
 from builtins import object
 import sys
 import psychopy
+from pkg_resources import parse_version
 
 if not hasattr(sys, 'frozen'):
     try:
@@ -170,7 +169,7 @@ class PsychoPyApp(wx.App):
             splashBitmap = wx.Image(name=splashFile).ConvertToBitmap()
             splash = AS.AdvancedSplash(None, bitmap=splashBitmap,
                                        timeout=3000,
-                                       style=AS.AS_TIMEOUT | wx.FRAME_SHAPED,
+                                       agwStyle=AS.AS_TIMEOUT | AS.AS_CENTER_ON_SCREEN,
                                        shadowcolour=wx.RED)  # transparency?
             splash.SetTextPosition((10, 240))
             splash.SetText(_translate("  Loading libraries..."))
@@ -317,8 +316,13 @@ class PsychoPyApp(wx.App):
             tipFile = os.path.join(
                 self.prefs.paths['resources'], _translate("tips.txt"))
             tipIndex = self.prefs.appData['tipIndex']
-            tp = wx.CreateFileTipProvider(tipFile, tipIndex)
-            showTip = wx.ShowTip(None, tp)
+            if parse_version(wx.__version__) >= parse_version('4.0.0a1'):
+                tp = wx.adv.CreateFileTipProvider(tipFile, tipIndex)
+                showTip = wx.adv.ShowTip(None, tp)
+            else:
+                tp = wx.CreateFileTipProvider(tipFile, tipIndex)
+                showTip = wx.ShowTip(None, tp)
+
             self.prefs.appData['tipIndex'] = tp.GetCurrentTip()
             self.prefs.saveAppData()
             self.prefs.app['showStartupTips'] = showTip
@@ -463,6 +467,7 @@ class PsychoPyApp(wx.App):
         thisFrame.Show(True)
         thisFrame.Raise()
         self.SetTopWindow(thisFrame)
+        return thisFrame
 
     def showBuilder(self, event=None, fileList=()):
         # have to reimport because it is ony local to __init__ so far
@@ -639,7 +644,9 @@ class PsychoPyApp(wx.App):
                 self.prefs.saveAppData()
             except Exception:
                 pass  # we don't care if this fails - we're quitting anyway
-        sys.exit()
+        self.Destroy()
+        if not self.testMode:
+            sys.exit()  # sys exit during pytest will end testing?
 
     def showPrefs(self, event):
         from psychopy.app.preferencesDlg import PreferencesDlg
@@ -656,7 +663,7 @@ class PsychoPyApp(wx.App):
             "For stimulus generation and experimental control in python.\n"
             "PsychoPy depends on your feedback. If something doesn't work\n"
             "then let us know at psychopy-users@googlegroups.com")
-        if wx.version() >= '4.':
+        if parse_version(wx.__version__) >= parse_version('4.0a1'):
             info = wx.adv.AboutDialogInfo()
             showAbout = wx.adv.AboutBox
         else:

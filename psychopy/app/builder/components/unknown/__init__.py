@@ -1,3 +1,7 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import absolute_import, print_function
 
 from os import path
 from .._base import BaseComponent, Param, _translate
@@ -26,6 +30,7 @@ class UnknownComponent(BaseComponent):
         self.exp = exp  # so we can access the experiment if necess
         self.parentName = parentName  # to access the routine too if needed
         self.params = {}
+        self.depends = []
         _hint = _translate("Name of this component (alpha-numeric or _, "
                            "no spaces)")
         self.params['name'] = Param(name, valType='code',

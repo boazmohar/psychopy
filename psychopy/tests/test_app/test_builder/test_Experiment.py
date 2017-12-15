@@ -1,7 +1,7 @@
 from __future__ import print_function
 from past.builtins import execfile
 from builtins import object
-from psychopy.app import psychopyApp
+
 import psychopy.app.builder.experiment
 from os import path
 import os, shutil, glob, sys
@@ -9,15 +9,12 @@ import py_compile
 import difflib
 from tempfile import mkdtemp
 import codecs
-from psychopy import core, tests, data
+from psychopy import core, tests, prefs
 import pytest
 import locale
-import wx
 from lxml import etree
-import threading
 import numpy
 
-#from psychopy.info import _getSha1hexDigest as sha1hex
 
 # Jeremy Gray March 2011
 
@@ -30,6 +27,7 @@ import numpy
 #   load should change things
 
 allComponents = psychopy.app.builder.experiment.getComponents(fetchIcons=False)
+
 
 def _filterout_legal(lines):
     """Ignore first 5 lines: header info, version, date can differ no problem
@@ -53,6 +51,7 @@ def _diff_file(a, b):
     """ diff of files read as strings, by line; output is similar to git gui diff """
     diff = _diff(open(a).readlines(), open(b).readlines())
     return list(diff)
+
 
 class TestExpt(object):
     @classmethod
@@ -299,7 +298,7 @@ class TestExpt(object):
         #load the data
         print("searching..." +datafileBase)
         print(glob.glob(datafileBase+'*'))
-        f = open(datafileBase+".csv", 'rU')
+        f = open(datafileBase+".csv", 'rb')
         dat = numpy.recfromcsv(f, case_sensitive=True)
         f.close()
         assert len(dat)==8 # because 4 'blocks' with 2 trials each (3 stims per trial)
@@ -370,34 +369,48 @@ class TestExpt(object):
         assert namespace.makeLoopIndex('trials_2') == 'thisTrial_2'
         assert namespace.makeLoopIndex('stimuli') == 'thisStimulus'
 
-class Test_ExptComponents(object):
+
+
+class Test_App(object):
     """This test fetches all standard components and checks that, with default
     settings, they can be added to a Routine and result in a script that compiles
     """
-    def test_all_components(self):
-        for compName, compClass in list(allComponents.items()):
-            if compName in ['SettingsComponent']:
-                continue
-            thisComp = compClass(exp=self.exp, parentName='testRoutine', name=compName)
-            self._checkCompileWith(thisComp)
-    @classmethod
-    def setup_class(cls):
-        app = psychopyApp._app #this was created already
-        app.newBuilderFrame()
-        cls.builder = app.getAllFrames("builder")[-1] # the most recent builder frame created
-        cls.exp = cls.builder.exp
-        cls.here = path.abspath(path.dirname(__file__))
-        cls.tmp_dir = mkdtemp(prefix='psychopy-tests-app')
-        cls.exp.addRoutine('testRoutine')
-        cls.testRoutine = cls.exp.routines['testRoutine']
-        cls.exp.flow.addRoutine(cls.testRoutine, 0)
-
+    @pytest.mark.usefixtures('pytest_namespace')
     def setup(self):
-        # dirs and files:
-        pass
-    @classmethod
-    def teardown_class(cls):
-        shutil.rmtree(cls.tmp_dir, ignore_errors=True)
+        self.app = pytest.app
+
+        self.builder = self.app.newBuilderFrame()
+        self.exp = self.builder.exp
+        self.here = path.abspath(path.dirname(__file__))
+        self.tmp_dir = mkdtemp(prefix='psychopy-tests-app')
+        self.exp.addRoutine('testRoutine')
+        self.testRoutine = self.exp.routines['testRoutine']
+        self.exp.flow.addRoutine(self.testRoutine, 0)
+
+    def teardown(self):
+        shutil.rmtree(self.tmp_dir, ignore_errors=True)
+
+    # def test_all_components(self):
+    #     for compName, compClass in list(allComponents.items()):
+    #         if compName in ['SettingsComponent']:
+    #             continue
+    #         thisComp = compClass(exp=self.exp, parentName='testRoutine', name=compName)
+    #         self._checkCompileWith(thisComp)
+
+    def test_BuilderFrame(self):
+        """Tests of the Builder frame. We can call dialog boxes using
+        a timeout (will simulate OK being pressed)
+        """
+        builderView = self.app.newBuilderFrame()
+
+        expfile = path.join(prefs.paths['tests'],
+                            'data', 'test001EntryImporting.psyexp')
+        builderView.fileOpen(filename=expfile)
+        builderView.setExperimentSettings(timeout=1000)
+        builderView.isModified = False
+        #assert exp == 5
+        del builderView
+
 
 #    def _send_OK_after(self):
 #        #this is supposed to help with sending button clicks but not working

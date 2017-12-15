@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 ################
 # see notes at bottom for requirements
-from __future__ import print_function
+from __future__ import absolute_import, print_function
 import glob
 import os
 import sys
 from sys import platform
 from distutils.core import setup
+from distutils.version import StrictVersion
 
 # regenerate __init__.py only if we're in the source repos (not in a zip file)
 try:
@@ -23,7 +24,7 @@ packageData = []
 requires = []
 
 if platform != 'darwin':
-    raise "As of Aug 2013, setupApp.py is strictly for building the Mac Standalone bundle"
+    raise RuntimeError("As of Aug 2013, setupApp.py is strictly for building the Mac Standalone bundle")
 
 import bdist_mpkg
 import py2app
@@ -38,7 +39,8 @@ frameworks.extend(opencvLibs)
 
 import macholib
 #print("~"*60 + "macholib verion: "+macholib.__version__)
-if macholib.__version__ <= "1.7":
+
+if StrictVersion(macholib.__version__) <= StrictVersion('1.7'):
     print("Applying macholib patch...")
     import macholib.dyld
     import macholib.MachOGraph
@@ -90,7 +92,9 @@ setup(
                       # these aren't needed, but liked
                       'psychopy_ext', 'pyfilesec', 'rusocsci',
                       'bidi',  # for right-left language conversions
-                      'future', 'past', 'lib2to3', 'json_tricks',  # for Py3 conversion (json_tricks allows saving arrays/dates in json)
+                      # for Py3 compatibility
+                      'future', 'past', 'lib2to3',
+                      'json_tricks',  # allows saving arrays/dates in json
                       ],
             excludes=['bsddb', 'jinja2', 'IPython','ipython_genutils','nbconvert',
                       'OpenGL','OpenGL.WGL','OpenGL.raw.WGL.*',
